@@ -191,21 +191,25 @@ def render_sidebar():
 def render_sidebar_footer():
     """Render footer in sidebar with developer info."""
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 👨‍💻 About")
+    st.sidebar.markdown("### 🎓 About")
     
     with st.sidebar.expander("Developer Info"):
         st.markdown("""
-        **Giovanni Destasio**
+        **Giovanni De Stasio**
         
-        🎓 *Financial Engineer & Developer*
+        🎓 *Finance & Economics Student*  
+        📍 *Università Bocconi, Milan*
         
-        📧 giovanni.destasio@example.com
+        📧 [gdestasio922@gmail.com](mailto:gdestasio922@gmail.com)
         
-        💼 [LinkedIn](https://linkedin.com/in/giovanni-destasio)
+        💼 [LinkedIn](https://www.linkedin.com/in/gds-)
         
-        🐙 [GitHub](https://github.com/giovannidestasio)
+        🐙 [GitHub](https://github.com/NutellaPazza)
+        
+        📊 [Project Repository](https://github.com/NutellaPazza/option-pricing-calculator)
         
         ---
         
-        *This project implements various option pricing models using Python and Streamlit.*
+        🤖 *Built with AI-Assisted Development*  
+        *Domain expertise + AI capabilities = Professional software*
         """)
