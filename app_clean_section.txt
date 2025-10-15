@@ -1,0 +1,402 @@
+def main():
+    """Main application function."""
+    
+    # Header
+    st.title(f"{APP_INFO['icon']} {APP_INFO['title']}")
+    st.markdown(f"*{APP_INFO['description']}*")
+    st.markdown("---")
+    
+    # Render sidebar and get parameters
+    params = render_sidebar()
+    render_sidebar_footer()
+    
+    # Initialize models
+    bs_model = BlackScholesModel()
+    greeks_calc = GreeksCalculator()
+    
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🔢 Pricing & Results",
+        "📈 Greeks Analysis",
+        "� Sensitivity Analysis",
+        "� Heatmaps",
+        "ℹ️ About"
+    ])
+    
+    # TAB 1: Pricing & Results
+    with tab1:
+        st.header("Option Pricing Results")
+        
+        # Display input summary
+        display_input_summary(params)
+        
+        st.markdown("---")
+        
+        # Calculate price based on selected model
+        try:
+            price = pricing_model.calculate_price(
+                spot=params['spot'],
+                strike=params['strike'],
+                time_to_maturity=params['time_to_maturity'],
+                risk_free_rate=params['risk_free_rate'],
+                volatility=params['volatility'],
+                option_type=params['option_type']
+            )
+            
+            # Display price with confidence interval for Monte Carlo
+            if params['model'] == 'Monte Carlo':
+                price_est, lower, upper = mc_model.calculate_with_confidence(
+                    spot=params['spot'],
+                    strike=params['strike'],
+                    time_to_maturity=params['time_to_maturity'],
+                    risk_free_rate=params['risk_free_rate'],
+                    volatility=params['volatility'],
+                    option_type=params['option_type']
+                )
+                display_option_price(price_est, params['option_type'], params['model'])
+                st.info(f"📊 **95% Confidence Interval**: [${lower:.4f}, ${upper:.4f}]")
+            else:
+                display_option_price(price, params['option_type'], params['model'])
+            
+            # Calculate and display Greeks (only for Black-Scholes for now)
+            if params['model'] == "Black-Scholes":
+                st.markdown("---")
+                greeks = greeks_calc.calculate_all_greeks(
+                    spot=params['spot'],
+                    strike=params['strike'],
+                    time_to_maturity=params['time_to_maturity'],
+                    risk_free_rate=params['risk_free_rate'],
+                    volatility=params['volatility'],
+                    option_type=params['option_type']
+                )
+                display_greeks(greeks)
+                
+                # Calculate intrinsic value
+                st.markdown("---")
+                if params['option_type'] == 'call':
+                    intrinsic_value = max(params['spot'] - params['strike'], 0)
+                else:
+                    intrinsic_value = max(params['strike'] - params['spot'], 0)
+                
+                display_time_value(price, intrinsic_value)
+                
+                # Payoff diagram
+                st.markdown("---")
+                st.subheader("📉 Payoff Diagram")
+                plot_payoff_diagram(
+                    spot=params['spot'],
+                    strike=params['strike'],
+                    option_price=price,
+                    option_type=params['option_type']
+                )
+                
+            elif params['model'] == "Monte Carlo":
+                st.info("🚧 Monte Carlo model coming soon!")
+                st.write("This feature is under development. Stay tuned!")
+                
+            elif params['model'] == "Binomial Tree":
+                st.info("🚧 Binomial Tree model coming soon!")
+                st.write("This feature is under development. Stay tuned!")
+                
+        except Exception as e:
+            st.error(f"❌ Error calculating option price: {str(e)}")
+            st.exception(e)
+    
+    # TAB 2: Greeks Analysis
+    with tab2:
+        st.header("Greeks Sensitivity Analysis")
+        
+        if params['model'] == "Black-Scholes":
+            # Display current Greeks
+            greeks = greeks_calc.calculate_all_greeks(
+                spot=params['spot'],
+                strike=params['strike'],
+                time_to_maturity=params['time_to_maturity'],
+                risk_free_rate=params['risk_free_rate'],
+                volatility=params['volatility'],
+                option_type=params['option_type']
+            )
+            
+            st.markdown("### Current Greeks Values")
+            display_greeks(greeks)
+            
+            st.markdown("---")
+            
+            # Plot all Greeks together
+            st.markdown("### Greeks vs Spot Price")
+            plot_all_greeks(params, greeks_calc)
+            
+            st.markdown("---")
+            
+            # Individual Greek plots
+            st.markdown("### Individual Greek Analysis")
+            
+            greek_choice = st.selectbox(
+                "Select Greek to Analyze",
+                options=['Delta', 'Gamma', 'Theta', 'Vega', 'Rho'],
+                index=0
+            )
+            
+            # Map Greek names to calculator methods
+            greek_methods = {
+                'Delta': greeks_calc.delta,
+                'Gamma': greeks_calc.gamma,
+                'Theta': greeks_calc.theta,
+                'Vega': greeks_calc.vega,
+                'Rho': greeks_calc.rho
+            }
+            
+            plot_greeks_vs_spot(
+                params=params,
+                greek_calculator=greek_methods[greek_choice],
+                greek_name=greek_choice
+            )
+            
+            # Greek interpretation
+            interpretations = {
+                'Delta': """
+                **Delta (Δ)** measures the rate of change of option value with respect to changes in the underlying asset's price.
+                - **Call Delta**: Ranges from 0 to 1
+                - **Put Delta**: Ranges from -1 to 0
+                - Also represents the hedge ratio (number of shares to hedge)
+                """,
+                'Gamma': """
+                **Gamma (Γ)** measures the rate of change in Delta with respect to changes in the underlying price.
+                - Maximum for at-the-money options
+                - Indicates Delta stability
+                - Same for calls and puts
+                - Always positive for long positions
+                """,
+                'Theta': """
+                **Theta (Θ)** measures the rate of change in option value with respect to time (time decay).
+                - Usually negative for long positions
+                - Expressed per day
+                - Maximum for at-the-money options near expiration
+                - Time is the enemy of option buyers
+                """,
+                'Vega': """
+                **Vega (ν)** measures sensitivity to volatility changes.
+                - Always positive for long positions
+                - Same for calls and puts
+                - Maximum for at-the-money options
+                - Long-dated options have higher vega
+                """,
+                'Rho': """
+                **Rho (ρ)** measures sensitivity to interest rate changes.
+                - Positive for calls, negative for puts
+                - Less significant for short-dated options
+                - More important for long-dated options
+                """
+            }
+            
+            with st.expander(f"ℹ️ About {greek_choice}"):
+                st.markdown(interpretations[greek_choice])
+        
+        else:
+            st.info("Greeks analysis is currently only available for Black-Scholes model.")
+    
+    # TAB 3: Sensitivity Analysis
+    with tab3:
+        st.header("📊 Sensitivity Analysis")
+        
+        if params['model'] == "Black-Scholes":
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📈 Price vs Volatility")
+                plot_price_vs_volatility(bs_model, params)
+                
+                st.markdown("""
+                **Analysis:**
+                - Shows how option value changes with volatility
+                - Higher volatility = higher option value
+                - Demonstrates Vega sensitivity
+                """)
+            
+            with col2:
+                st.subheader("⏱️ Price vs Time (Time Decay)")
+                plot_price_vs_time(bs_model, params)
+                
+                st.markdown("""
+                **Analysis:**
+                - Shows time decay effect (Theta)
+                - Options lose value as expiration approaches
+                - Decay accelerates near expiration
+                """)
+            
+            st.markdown("---")
+            
+            # Scenario analysis
+            st.subheader("🎯 Scenario Analysis")
+            
+            st.markdown("Analyze option value under different market scenarios:")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                scenario_spot = st.slider(
+                    "Spot Price Change (%)",
+                    min_value=-50,
+                    max_value=50,
+                    value=0,
+                    step=5
+                )
+            
+            with col2:
+                scenario_vol = st.slider(
+                    "Volatility Change (%)",
+                    min_value=-50,
+                    max_value=50,
+                    value=0,
+                    step=5
+                )
+            
+            with col3:
+                scenario_time = st.slider(
+                    "Days Passed",
+                    min_value=0,
+                    max_value=int(params['time_to_maturity'] * 365),
+                    value=0,
+                    step=5
+                )
+            
+            # Calculate scenario price
+            scenario_params = params.copy()
+            scenario_params['spot'] = params['spot'] * (1 + scenario_spot / 100)
+            scenario_params['volatility'] = params['volatility'] * (1 + scenario_vol / 100)
+            scenario_params['time_to_maturity'] = params['time_to_maturity'] - (scenario_time / 365)
+            
+            if scenario_params['time_to_maturity'] > 0:
+                scenario_price = bs_model.calculate_price(
+                    spot=scenario_params['spot'],
+                    strike=scenario_params['strike'],
+                    time_to_maturity=scenario_params['time_to_maturity'],
+                    risk_free_rate=scenario_params['risk_free_rate'],
+                    volatility=scenario_params['volatility'],
+                    option_type=scenario_params['option_type']
+                )
+                
+                original_price = bs_model.calculate_price(
+                    spot=params['spot'],
+                    strike=params['strike'],
+                    time_to_maturity=params['time_to_maturity'],
+                    risk_free_rate=params['risk_free_rate'],
+                    volatility=params['volatility'],
+                    option_type=params['option_type']
+                )
+                price_change = scenario_price - original_price
+                pct_change = (price_change / original_price) * 100
+                
+                st.markdown("### Scenario Results")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Original Price",
+                        f"${original_price:.4f}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Scenario Price",
+                        f"${scenario_price:.4f}",
+                        delta=f"${price_change:.4f}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Change",
+                        f"{pct_change:+.2f}%",
+                        delta=f"${price_change:.4f}"
+                    )
+            else:
+                st.warning("⚠️ Time to maturity cannot be negative!")
+        
+        else:
+            st.info("Sensitivity analysis is currently only available for Black-Scholes model.")
+    
+    # TAB 4: Heatmaps
+    with tab4:
+        if params['model'] == "Black-Scholes":
+            from ui.heatmaps import render_heatmaps_tab
+            render_heatmaps_tab(params, bs_model)
+        
+        else:
+            st.info("Heatmaps are currently only available for Black-Scholes model.")
+    
+    # TAB 5: About
+    with tab5:
+        render_about_page()
+
+
+def render_about_page():
+    """Render the About page with project and developer information."""
+    
+    st.markdown("""
+    <div style='text-align: center; padding: 20px 0;'>
+        <h1>🚀 Option Pricing Calculator</h1>
+        <p style='font-size: 18px; color: #666;'>Advanced Financial Derivatives Pricing Models</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("""
+        ## 📋 About This Project
+        
+        This web application implements advanced mathematical models for pricing financial options,
+        providing a professional tool for financial analysts, traders, and quantitative finance students.
+        
+        ### 🔬 Models Implemented
+        
+        **1. Black-Scholes Model** ✅
+        - Classic analytical solution for European options
+        - Closed-form formula for fast and accurate pricing
+        - Ideal for vanilla options
+        
+        **2. Monte Carlo Simulation** 🚧
+        - Stochastic simulation for complex pricing
+        - Handles non-standard and path-dependent payoffs
+        - Flexible for exotic options
+        
+        **3. Binomial Tree Model** 🚧
+        - Discrete model for American and European options
+        - Decision tree visualization
+        - Early exercise features
+        
+        ### ✨ Key Features
+        
+        - 🔄 **Real-time pricing** calculations
+        - 📊 **Complete Greeks analysis** (Delta, Gamma, Theta, Vega, Rho)
+        - 📈 **Interactive charts** with Plotly
+        - 🔍 **Advanced sensitivity analysis**
+        - ⚖️ **Model comparison** capabilities
+        - 🎯 **Profit/Loss diagrams**
+        - 📱 **Responsive interface** and user-friendly
+        
+        ### 🛠️ Technology Stack
+        
+        - **Python** - Core programming language
+        - **Streamlit** - Web application framework
+        - **NumPy & SciPy** - Mathematical computations
+        - **Plotly** - Interactive data visualizations
+        - **Pandas** - Data manipulation
+        - **Object-Oriented Design** - Scalable architecture
+        
+        ### 🎯 Use Cases
+        
+        - **Financial Analysts** - Professional derivatives valuation
+        - **Quantitative Traders** - Rapid pricing and Greeks analysis
+        - **Risk Managers** - Sensitivity calculations for hedging
+        - **Students** - Practical learning of financial models
+        - **Researchers** - Comparison between methodologies
+        """)
+    
+    with col2:
+        st.markdown("""
+        <div style='background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+            <h3 style='color: #1f77b4; margin-top: 0;'>👨‍💻 Developer</h3>
+            <h4 style='margin: 10px 0;'>Giovanni Destasio</h4>
